@@ -10,7 +10,7 @@
 1. Создать ВМ с Ubuntu 20.04/22.04 или развернуть докер любым удобным способом
    * Создал ВМ Ubuntu 20.04 на YC
 1. Поставить на нем Docker Engine
-  * Набором команд произвел скачивание и установку Docker.
+   * Набором команд произвел скачивание и установку Docker.
 	```bash
 	curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh && rm get-docker.sh && sudo usermod -aG docker $USER && newgrp docker
 
