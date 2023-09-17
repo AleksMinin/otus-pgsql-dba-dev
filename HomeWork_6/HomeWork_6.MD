@@ -14,10 +14,10 @@ test=#\q
 aminin@aminin-VirtualBox:~$ sudo pg_ctlcluster 15 main restart;
 aminin@aminin-VirtualBox:~$ psql -h localhost -p5432 -U postgres -d test
 test=#
-test=# select setting || ' x ' || coalesce(unit, 'units')
+test=# select setting || ' x ' || coalesce(unit, 'units') as sval
 from pg_settings
 where name = 'checkpoint_timeout';
- ?column? 
+   sval 
 ----------
  30 x s
 (1 строка)
