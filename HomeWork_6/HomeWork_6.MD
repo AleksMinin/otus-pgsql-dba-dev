@@ -80,8 +80,8 @@ tps = 377.677499 (without initial connection time)
 test=# SELECT sum(size)/1024/1024 as sise_MB, 
               count(*) as cnt_files 
          FROM pg_ls_waldir()
-		WHERE date_trunc('minute', modification) between timestamp '2023-09-17 02:38:00'
-									and timestamp '2023-09-17 02:53:00';
+	WHERE date_trunc('minute', modification) between timestamp '2023-09-17 02:38:00'
+						     and timestamp '2023-09-17 02:53:00';
        sise_mb       | cnt_files 
 ---------------------+-----------
  80.0000000000000000 |         5
