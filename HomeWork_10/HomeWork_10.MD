@@ -54,7 +54,7 @@ test=# \dp
  Schema | Name  | Type  |     Access privileges     | Column privileges | Policies
 --------+-------+-------+---------------------------+-------------------+----------
  public | test  | table | postgres=arwdDxt/postgres+|                   |
-        |       |       | urepl=awd/postgres        |                   |
+        |       |       | urepl=arwd/postgres        |                   |
  public | test2 | table | postgres=arwdDxt/postgres+|                   |
         |       |       | urepl=r/postgres          |                   |
 (2 rows)
