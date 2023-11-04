@@ -41,7 +41,7 @@ begin
       loop
           sValFrom := to_char(cr.dBgnRange, 'YYYY-MM-DD');  
           sValTo	 := to_char(cr.dBgnRange + interval '1 month', 'YYYY-MM-DD');
-          /* Формирование имени секции и её границ 
+          /* Формирование имени секций и их границ 
              значений плановой даты вылета */
           sQuery := format($que$
                              CREATE TABLE flights_range_%s
@@ -114,6 +114,7 @@ begin
                       from ticket_flights f
                      order by 1)
         loop
+            /* Формирование имени секций и их возможных значений */		
             sQuery := format($que$
                                CREATE TABLE ticket_flights_bylst_%s
                                PARTITION OF ticket_flights_bylst
