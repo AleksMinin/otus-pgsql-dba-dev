@@ -16,6 +16,11 @@
 *Домашнее задание буду выполнять на базе flights, взятой с сайта [PostgresPro](https://postgrespro.ru/education/demodb)
 
 ![Схема БД](/images/schema_db.jpg)
+
+<kbd>
+  <img src="/images/schema_db.jpg" />
+</kbd>
+
 * Необходимо:
 1. Реализовать прямое соединение двух или более таблиц
 
