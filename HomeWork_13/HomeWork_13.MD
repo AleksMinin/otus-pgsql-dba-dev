@@ -15,7 +15,7 @@
 написания запросов с различными типами соединений
 *Домашнее задание буду выполнять на базе flights, взятой с сайта [PostgresPro](https://postgrespro.ru/education/demodb)
 
-![Схема БД](/images/schema_db.jpg)
+![Схема БД](HomeWork_13/images/schema_db.jpg)
 
 <kbd>
   <img src="/images/schema_db.jpg" />
