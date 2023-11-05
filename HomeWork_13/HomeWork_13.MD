@@ -15,7 +15,9 @@
 написания запросов с различными типами соединений
 *Домашнее задание буду выполнять на базе flights, взятой с сайта [PostgresPro](https://postgrespro.ru/education/demodb)
 
-![Схема БД](HomeWork_13/images/schema_db.jpg)
+![Схема БД](https://github.com/AleksMinin/otus-pgsql-dba-dev/blob/1c43fb23947b541d4869ec45dfd1eb96d1e59f5d/HomeWork_13/images/schema_db.jpg)
+
+![Image alt](https://github.com/AleksMinin/otus-pgsql-dba-dev/raw/main//HomeWork_13/images/schema_db.jpg)
 
 <kbd>
   <img src="/images/schema_db.jpg" />
