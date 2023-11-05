@@ -12,9 +12,9 @@
 различными вариантами соединения таблиц.
 В данном задании тренируются навыки: написание запросов с различными типами соединений
 
-*Домашнее задание буду выполнять на базе flights, взятой с сайта [PostgresPro](https://postgrespro.ru/education/demodb)
+* Домашнее задание буду выполнять на базе flights, взятой с сайта [PostgresPro](https://postgrespro.ru/education/demodb)
 
-*Схема базы данных
+* Схема базы данных
 <kbd>
   <img src="https://github.com/AleksMinin/otus-pgsql-dba-dev/raw/main/HomeWork_13/images/schema_db.jpg" alt="Схема БД" caption="Схема БД"/>
 </kbd>
