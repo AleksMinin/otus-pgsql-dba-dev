@@ -53,6 +53,7 @@ return new;
 end;
 $function$;
 
+-- Проверка работоспособности
 INSERT INTO sales (good_id, sales_qty) VALUES (1, 10), (1, 1), (1, 120), (2, 1);
 
 select * from good_sum_mart;
