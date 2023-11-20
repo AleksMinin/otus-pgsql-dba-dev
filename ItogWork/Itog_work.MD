@@ -32,34 +32,6 @@ d|depart_date|busstation            |order_place|all_place|
 
 * Запуск каждого запроса выполняю два раза, первый прогревочный, второй раз контрольный (замеры прилагаются со второго запуска).
 * Тестирование запросов проводил на двух виртуальных машинах: 
-  - CPU 4-core, RAM 16Gb, HDD 40Gb.
-	```sql
-	ubuntu@vm-ubuntu:~$ sudo hdparm -t /dev/vda
-
-	/dev/vda:
-	 Timing buffered disk reads: 100 MB in  3.07 seconds =  32.61 MB/sec
-	 
-	# Настройки кластера PG 15
-	name                            |setting|
-	--------------------------------+-------+
-	checkpoint_completion_target    |0.9    |
-	default_statistics_target       |500    |
-	effective_cache_size            |1572864|
-	effective_io_concurrency        |2      |
-	huge_pages                      |off    |
-	maintenance_work_mem            |2097152|
-	max_connections                 |20     |
-	max_parallel_maintenance_workers|2      |
-	max_parallel_workers            |4      |
-	max_parallel_workers_per_gather |2      |
-	max_wal_size                    |16384  |
-	max_worker_processes            |4      |
-	min_wal_size                    |4096   |
-	random_page_cost                |4      |
-	shared_buffers                  |524288 |
-	wal_buffers                     |2048   |
-	work_mem                        |52428  |	
-	```  
   - CPU 4-core, RAM 16Gb, SSDnvme 40Gb.
 	```sql
 	aminin@aminin-VirtualBox:~$ sudo hdparm -t /dev/nvme0n1
@@ -90,12 +62,40 @@ d|depart_date|busstation            |order_place|all_place|
 	 
 	```    
 
+  - CPU 4-core, RAM 16Gb, HDD 40Gb.
+	```sql
+	ubuntu@vm-ubuntu:~$ sudo hdparm -t /dev/vda
+
+	/dev/vda:
+	 Timing buffered disk reads: 100 MB in  3.07 seconds =  32.61 MB/sec
+	 
+	# Настройки кластера PG 15
+	name                            |setting|
+	--------------------------------+-------+
+	checkpoint_completion_target    |0.9    |
+	default_statistics_target       |500    |
+	effective_cache_size            |1572864|
+	effective_io_concurrency        |2      |
+	huge_pages                      |off    |
+	maintenance_work_mem            |2097152|
+	max_connections                 |20     |
+	max_parallel_maintenance_workers|2      |
+	max_parallel_workers            |4      |
+	max_parallel_workers_per_gather |2      |
+	max_wal_size                    |16384  |
+	max_worker_processes            |4      |
+	min_wal_size                    |4096   |
+	random_page_cost                |4      |
+	shared_buffers                  |524288 |
+	wal_buffers                     |2048   |
+	work_mem                        |52428  |	
+	```  
 # Решение:
 * **!!!Исходный запрос подсчитывает неверные кол-ва билетов**
-* В моем итоговом решении общее кол-во мест на рейс и проданное кол-во билетов, корректно. Если по моему решению еще посчитать Итоговое sum(order_place), то  как раз и получится общее число записей в таблице tickets.
-* Моё итоговое решение через CTE
+* В моём решении общее кол-во мест на рейс и проданное кол-во билетов, корректно. Если по моему решению еще посчитать Итоговое sum(order_place), то  как раз и получится общее число записей в таблице tickets.
+* Моё решение через CTE + доп.индексы.
 * Сначала тестировал разные варианты запросов, анализируя план, время, стоимость, порядок обхода, использование индексов. Секционировал методом by_hash таблицу tickets (Время только увеличивалось, что на SSD, что на HDD). Также пробовал на стенде с HDD отсаживать таблицу tickets в отдельное табличное пространство на отдельном диске, время также затрачивалось больше (скорее всего это связано с эмуляцией HDD на YC, т.к. на реальных HDD вероятнее всего, чтение было бы лучше с разных HDD).
-* Самым тяжелым местом было соединение ride.fkbus = seat.fkbus, избавиться от которого для подсчета общего кол-ва посадочных мест решил в первом же запросе. плюс оптимизатор использовал мой первый доп.индекс (см.ниже). В итоге остановился на разбивке запроса на части, продумывая каждый следующий запрос
+* Самым тяжелым местом было соединение ride.fkbus = seat.fkbus, (оно же было не правильным), избавиться от которого для подсчета общего кол-ва посадочных мест решил в первом же запросе. плюс оптимизатор использовал мой первый доп.индекс (см.ниже). В итоге остановился на разбивке запроса на части, продумывая каждый следующий запрос
 
   --- 
 
