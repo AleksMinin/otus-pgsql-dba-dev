@@ -92,8 +92,9 @@ d|depart_date|busstation            |order_place|all_place|
 	```  
 # Решение:
 * **!!!Исходный запрос подсчитывает неверные кол-ва билетов**
-* В моём решении общее кол-во мест на рейс и проданное кол-во билетов, корректно. Если по моему решению еще посчитать Итоговое sum(order_place), то  как раз и получится общее число записей в таблице tickets.
-* Моё решение через CTE + доп.индексы.
+* В моих решениях общее кол-во мест на рейс и проданное кол-во билетов, корректно. Если по моему решению еще посчитать Итоговое sum(order_place), то  как раз и получится общее число записей в таблице tickets.
+* 1-е моё решение через CTE + доп.индексы.
+* 2-е моё решение через UNION ALL + расширение work_mem c 55MB до 200MB.
 * Сначала тестировал разные варианты запросов, анализируя план, время, стоимость, порядок обхода, использование индексов. Секционировал методом by_hash таблицу tickets (Время только увеличивалось, что на SSD, что на HDD). Также пробовал на стенде с HDD отсаживать таблицу tickets в отдельное табличное пространство на отдельном диске, время также затрачивалось больше (скорее всего это связано с эмуляцией HDD на YC, т.к. на реальных HDD вероятнее всего, чтение было бы лучше с разных HDD).
 * Самым тяжелым местом было соединение ride.fkbus = seat.fkbus, (оно же было не правильным), избавиться от которого для подсчета общего кол-ва посадочных мест решил в первом же запросе. плюс оптимизатор использовал мой первый доп.индекс (см.ниже). В итоге остановился на разбивке запроса на части, продумывая каждый следующий запрос
 
@@ -116,6 +117,7 @@ create index CONCURRENTLY tickets_fkride_idx on book.tickets (fkride);
 -------------------------
 
 **Исходный запрос:**
+---
 ```sql
 explain analyze 
 SELECT r.id, r.startdate as depart_date, bs.city || ', ' || bs.name as busstation, count(t.id) as order_place, count(st.id) as all_place
@@ -179,7 +181,8 @@ JIT:                                                                            
 Execution Time: 574365.324 ms                                                                                                                                                |
 ```
 
-**Моё решение:**
+**Решение №1 стенд с SSD (CTE + с доп. индексами):**
+---
 
 ``` sql 
 -- Создание двух доп.индексов
@@ -276,24 +279,26 @@ Execution Time: 31599.153 ms                                                    
 
 ```
 
-**Вывод по SSD:**
+**Вывод по SSD (CTE с доп.индексами):**
+---
 
-Исходый запрос:
+**Исходый запрос:**
 
 (cost=79 981 274.91..80 007 524.91 actual time=573 957.860..574 076.002 rows=1 500 000)   
 
-Оптимизированный запрос
+**Оптимизированный запрос**
 
 (cost= 4 826 569.76..4 826 757.26 actual time=31 353.369.. 31 477.566 rows=1 500 000)
 
-Прирост по времени 18 - кратный, по стоимости 16 кратное снижение стоимости.
+Сокращение времени выполнения 18 - кратное, по стоимости 16 кратное снижение стоимости.
 
 
 
 ----- Стенд с HDD -------
--------------------------
+---
 
 **Исходный запрос:**
+---
 ```sql
 explain analyze 
 SELECT r.id, r.startdate as depart_date, bs.city || ', ' || bs.name as busstation, count(t.id) as order_place, count(st.id) as all_place
@@ -359,8 +364,8 @@ SELECT r.id, r.startdate as depart_date, bs.city || ', ' || bs.name as busstatio
 ```
 
 
-
-**Мой вариант без доп.индексов:**
+**Решение №1 HDD (CTE без доп.индексов):**
+---
 ```sql
 explain analyze
 with
@@ -452,7 +457,8 @@ select f.id, f.depart_date,
 (53 rows)
 ```
 
-**Мой вариант с доп.индексами:**
+**Решение №1 HDD (CTE + доп.индексы):**
+---
 ```sql
 create index CONCURRENTLY seat_fkbus_idx on book.seat (fkbus);
 create index CONCURRENTLY tickets_fkride_idx on book.tickets (fkride);
@@ -543,17 +549,277 @@ select f.id, f.depart_date,
  Execution Time: 54869.482 ms
 (51 rows)
 ```
-**Вывод по HDD:**
+**Вывод по HDD (CTE + доп.индексы):**
+---
 
-Исходный запрос:
+**Исходный запрос:**
 
 (cost=80 590 536.40..80 616 786.40 actual time=637 070.144..637 197.838 rows=1 500 000)
 
-Оптимизированный запрос:
+**Оптимизированный запрос:**
 
 (cost=9 397 099.93..9 397 287.43 actual time=54 682.931..54 808.876 rows=1 500 000
 
-Прирост по времени 11.5 - кратный, по стоимости 9.5 - ти кратное снижение стоимости.
+Сокращение времени выполнения 11.5 - кратное, по стоимости 9.5 - ти кратное снижение стоимости.
+
+
+**Решение №2 с использованием запросов с UNION c SSD диском - получился еще быстрее предыдущего**
+---
+
+* Поднял настройки work_mem = 200MB вместо 55MB исходных. т.к. следующему запрому не хватало памияти для быстрой сортировки в памяти.
+```sql
+-- без поднятия work_mem сортировке не хватало памяти, было так Sort Method: external merge  Disk: 67704kB   
+-- поэтому временно поднял work_mem для теста
+
+SET work_mem = "200MB";
+
+explain analyze
+with
+q_null as
+(select t2.fkride as ride_id, date'1900-01-01' as depart_date, 0::numeric as nbusstation, 
+        count(t2.id) as order_place, 0::numeric as all_place
+   from book.tickets t2 
+  group by t2.fkride
+),
+q_one as
+(select r.id as ride_id, r.startdate as depart_date, r.fkschedule, count(st.id) as all_place
+   from book.ride r
+   join book.seat st on r.fkbus = st.fkbus
+  group by r.id, r.startdate, r.fkschedule
+),  
+q_two as 
+(select s.id, br.fkbusstationfrom as nbusstation
+   FROM book.schedule as s
+   join book.busroute as br on s.fkroute = br.id
+),
+q_three as
+(select o.ride_id, o.depart_date, t.nbusstation, 0::numeric as order_place, o.all_place
+  from q_one o
+  join q_two t on o.fkschedule = t.id
+),
+q_four as 
+(select * from q_null qn
+union all
+select * from q_three qt
+), q_five as
+(select q.ride_id, 
+        max(q.depart_date) as depart_date, 
+        max(q.nbusstation) as nbusstation, 
+        sum(q.order_place) as order_place, 
+        sum(q.all_place) as all_place
+  from q_four q
+ group by q.ride_id
+)
+select q.ride_id, q.depart_date, q.order_place, 
+       q.all_place, concat(b.city, ', ',b."name") as busstation
+  from q_five q
+  join book.busstation b on q.nbusstation = b.id 
+  order by q.depart_date;
+  
+  QUERY PLAN                                                                                                                                                                               |
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+Sort  (cost=2220258.80..2220258.83 rows=10 width=104) (actual time=16042.159..16251.034 rows=1500000 loops=1)                                                                            |
+  Sort Key: (max("*SELECT* 1".depart_date))                                                                                                                                              |
+  Sort Method: quicksort  Memory: 165397kB                                                                                                                                               |
+  ->  Hash Join  (cost=2220252.51..2220258.64 rows=10 width=104) (actual time=14402.380..15750.355 rows=1500000 loops=1)                                                                 |
+        Hash Cond: ((max("*SELECT* 1".nbusstation)) = (b.id)::numeric)                                                                                                                   |
+        ->  HashAggregate  (cost=2220251.29..2220254.29 rows=200 width=104) (actual time=14085.147..14959.383 rows=1500000 loops=1)                                                      |
+              Group Key: "*SELECT* 1".ride_id                                                                                                                                            |
+              Batches: 5  Memory Usage: 819265kB  Disk Usage: 40584kB                                                                                                                    |
+              ->  Append  (cost=1276605.66..2153311.81 rows=2975088 width=104) (actual time=7723.192..12956.887 rows=3000000 loops=1)                                                    |
+                    ->  Subquery Scan on "*SELECT* 1"  (cost=1276605.66..1324546.02 rows=1475088 width=104) (actual time=7723.190..8221.153 rows=1500000 loops=1)                        |
+                          ->  Finalize HashAggregate  (cost=1276605.66..1291356.54 rows=1475088 width=80) (actual time=7723.185..8051.737 rows=1500000 loops=1)                          |
+                                Group Key: t2.fkride                                                                                                                                     |
+                                Batches: 1  Memory Usage: 172049kB                                                                                                                       |
+                                ->  Gather  (cost=952086.30..1261854.78 rows=2950176 width=12) (actual time=5916.979..6485.417 rows=4500000 loops=1)                                     |
+                                      Workers Planned: 2                                                                                                                                 |
+                                      Workers Launched: 2                                                                                                                                |
+                                      ->  Partial HashAggregate  (cost=951086.30..965837.18 rows=1475088 width=12) (actual time=5885.491..6201.512 rows=1500000 loops=3)                 |
+                                            Group Key: t2.fkride                                                                                                                         |
+                                            Batches: 1  Memory Usage: 172049kB                                                                                                           |
+                                            Worker 0:  Batches: 1  Memory Usage: 172049kB                                                                                                |
+                                            Worker 1:  Batches: 1  Memory Usage: 172049kB                                                                                                |
+                                            ->  Parallel Seq Scan on tickets t2  (cost=0.00..838591.53 rows=22498953 width=12) (actual time=0.075..1579.616 rows=17999158 loops=3)       |
+                    ->  Subquery Scan on "*SELECT* 2"  (cost=753226.10..813890.35 rows=1500000 width=104) (actual time=3739.377..4565.066 rows=1500000 loops=1)                          |
+                          ->  Hash Join  (cost=753226.10..791390.35 rows=1500000 width=52) (actual time=3739.374..4352.765 rows=1500000 loops=1)                                         |
+                                Hash Cond: (s.fkroute = br.id)                                                                                                                           |
+                                ->  Hash Join  (cost=753223.75..787172.38 rows=1500000 width=20) (actual time=3739.296..4191.912 rows=1500000 loops=1)                                   |
+                                      Hash Cond: (r.fkschedule = s.id)                                                                                                                   |
+                                      ->  Finalize HashAggregate  (cost=753178.00..768178.00 rows=1500000 width=20) (actual time=3739.041..4010.625 rows=1500000 loops=1)                |
+                                            Group Key: r.id                                                                                                                              |
+                                            Batches: 1  Memory Usage: 172049kB                                                                                                           |
+                                            ->  Gather  (cost=423178.00..738178.00 rows=3000000 width=20) (actual time=3107.172..3299.312 rows=1500000 loops=1)                          |
+                                                  Workers Planned: 2                                                                                                                     |
+                                                  Workers Launched: 2                                                                                                                    |
+                                                  ->  Partial HashAggregate  (cost=422178.00..437178.00 rows=1500000 width=20) (actual time=3076.614..3179.386 rows=500000 loops=3)      |
+                                                        Group Key: r.id                                                                                                                  |
+                                                        Batches: 1  Memory Usage: 90129kB                                                                                                |
+                                                        Worker 0:  Batches: 1  Memory Usage: 90129kB                                                                                     |
+                                                        Worker 1:  Batches: 1  Memory Usage: 90129kB                                                                                     |
+                                                        ->  Hash Join  (cost=6.50..297178.00 rows=25000000 width=16) (actual time=76.663..1334.944 rows=20000000 loops=3)                |
+                                                              Hash Cond: (r.fkbus = st.fkbus)                                                                                            |
+                                                              ->  Parallel Seq Scan on ride r  (cost=0.00..14359.00 rows=625000 width=16) (actual time=0.011..37.279 rows=500000 loops=3)|
+                                                              ->  Hash  (cost=4.00..4.00 rows=200 width=8) (actual time=76.638..76.639 rows=200 loops=3)                                 |
+                                                                    Buckets: 1024  Batches: 1  Memory Usage: 16kB                                                                        |
+                                                                    ->  Seq Scan on seat st  (cost=0.00..4.00 rows=200 width=8) (actual time=76.582..76.601 rows=200 loops=3)            |
+                                      ->  Hash  (cost=27.00..27.00 rows=1500 width=8) (actual time=0.244..0.245 rows=1500 loops=1)                                                       |
+                                            Buckets: 2048  Batches: 1  Memory Usage: 75kB                                                                                                |
+                                            ->  Seq Scan on schedule s  (cost=0.00..27.00 rows=1500 width=8) (actual time=0.008..0.110 rows=1500 loops=1)                                |
+                                ->  Hash  (cost=1.60..1.60 rows=60 width=8) (actual time=0.043..0.044 rows=60 loops=1)                                                                   |
+                                      Buckets: 1024  Batches: 1  Memory Usage: 11kB                                                                                                      |
+                                      ->  Seq Scan on busroute br  (cost=0.00..1.60 rows=60 width=8) (actual time=0.030..0.034 rows=60 loops=1)                                          |
+        ->  Hash  (cost=1.10..1.10 rows=10 width=20) (actual time=317.216..317.217 rows=10 loops=1)                                                                                      |
+              Buckets: 1024  Batches: 1  Memory Usage: 9kB                                                                                                                               |
+              ->  Seq Scan on busstation b  (cost=0.00..1.10 rows=10 width=20) (actual time=317.196..317.200 rows=10 loops=1)                                                            |
+Planning Time: 0.377 ms                                                                                                                                                                  |
+JIT:                                                                                                                                                                                     |
+  Functions: 113                                                                                                                                                                         |
+  Options: Inlining true, Optimization true, Expressions true, Deforming true                                                                                                            |
+  Timing: Generation 5.409 ms, Inlining 198.155 ms, Optimization 337.672 ms, Emission 248.309 ms, Total 789.545 ms                                                                       |
+Execution Time: 16410.901 ms                                                                                                                                                             |
+  
+```
+**Вывод по SSD (CTE - запросы с UNION):**
+---
+**Исходый запрос:**
+
+(cost=79 981 274.91..80 007 524.91 actual time=573 957.860..574 076.002 rows=1 500 000)   
+
+**Оптимизированный запрос**
+
+(cost=2 220 258.80..2 220 258.83 actual time=16 042.159..16 251.034 rows=1 500 000)
+
+Сокращение времени выполнения 35.77 - кратное, по стоимости 36 кратное снижение стоимости.
+
+
+**Решение №2 с использованием запросов с UNION c HDD диском - тоже вышло достаточно хорошо**
+---
+
+```sql
+SET work_mem = "200MB";
+
+explain analyze
+with
+q_null as
+(select t2.fkride as ride_id, date'1900-01-01' as depart_date, 0::numeric as nbusstation, 
+        count(t2.id) as order_place, 0::numeric as all_place
+   from book.tickets t2 
+  group by t2.fkride
+),
+q_one as
+(select r.id as ride_id, r.startdate as depart_date, r.fkschedule, count(st.id) as all_place
+   from book.ride r
+   join book.seat st on r.fkbus = st.fkbus
+  group by r.id, r.startdate, r.fkschedule
+),  
+q_two as 
+(select s.id, br.fkbusstationfrom as nbusstation
+   FROM book.schedule as s
+   join book.busroute as br on s.fkroute = br.id
+),
+q_three as
+(select o.ride_id, o.depart_date, t.nbusstation, 0::numeric as order_place, o.all_place
+  from q_one o
+  join q_two t on o.fkschedule = t.id
+),
+q_four as 
+(select * from q_null qn
+union all
+select * from q_three qt
+), q_five as
+(select q.ride_id, 
+        max(q.depart_date) as depart_date, 
+        max(q.nbusstation) as nbusstation, 
+        sum(q.order_place) as order_place, 
+        sum(q.all_place) as all_place
+  from q_four q
+ group by q.ride_id
+)
+select q.ride_id, q.depart_date, q.order_place, 
+       q.all_place, concat(b.city, ', ',b."name") as busstation
+  from q_five q
+  join book.busstation b on q.nbusstation = b.id 
+  order by q.depart_date;
+
+                                                                                        QUERY PLAN                                      
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=2226820.09..2226820.12 rows=10 width=104) (actual time=22118.558..22346.421 rows=1500000 loops=1)
+   Sort Key: (max("*SELECT* 1".depart_date))
+   Sort Method: quicksort  Memory: 165397kB
+   ->  Hash Join  (cost=2226813.80..2226819.93 rows=10 width=104) (actual time=19714.797..21767.791 rows=1500000 loops=1)
+         Hash Cond: ((max("*SELECT* 1".nbusstation)) = (b.id)::numeric)
+         ->  HashAggregate  (cost=2226812.58..2226815.58 rows=200 width=104) (actual time=19332.990..20777.868 rows=1500000 loops=1)
+               Group Key: "*SELECT* 1".ride_id
+               Batches: 5  Memory Usage: 409665kB  Disk Usage: 81016kB
+               ->  Append  (cost=1281760.89..2159345.83 rows=2998522 width=104) (actual time=10299.863..18369.278 rows=3000000 loops=1)
+                     ->  Subquery Scan on "*SELECT* 1"  (cost=1281760.89..1330462.85 rows=1498522 width=104) (actual time=10299.861..10830.313 rows=1500000 loops=1)
+                           ->  Finalize HashAggregate  (cost=1281760.89..1296746.11 rows=1498522 width=80) (actual time=10299.855..10637.482 rows=1500000 loops=1)
+                                 Group Key: t2.fkride
+                                 Batches: 1  Memory Usage: 172049kB
+                                 ->  Gather  (cost=952086.05..1266775.67 rows=2997044 width=12) (actual time=8189.595..8808.518 rows=4499991 loops=1)
+                                       Workers Planned: 2
+                                       Workers Launched: 2
+                                       ->  Partial HashAggregate  (cost=951086.05..966071.27 rows=1498522 width=12) (actual time=8157.997..8477.521 rows=1499997 loops=3)
+                                             Group Key: t2.fkride
+                                             Batches: 1  Memory Usage: 221201kB
+                                             Worker 0:  Batches: 1  Memory Usage: 172049kB
+                                             Worker 1:  Batches: 1  Memory Usage: 172049kB
+                                             ->  Parallel Seq Scan on tickets t2  (cost=0.00..838591.70 rows=22498870 width=12) (actual time=0.044..2252.037 rows=17999158 loops=3)
+                     ->  Subquery Scan on "*SELECT* 2"  (cost=753226.11..813890.36 rows=1500000 width=104) (actual time=6393.430..7361.503 rows=1500000 loops=1)
+                           ->  Hash Join  (cost=753226.11..791390.36 rows=1500000 width=52) (actual time=6393.424..7097.137 rows=1500000 loops=1)
+                                 Hash Cond: (s.fkroute = br.id)
+                                 ->  Hash Join  (cost=753223.77..787172.39 rows=1500000 width=20) (actual time=6393.338..6901.143 rows=1500000 loops=1)
+                                       Hash Cond: (r.fkschedule = s.id)
+                                       ->  Finalize HashAggregate  (cost=753178.02..768178.02 rows=1500000 width=20) (actual time=6393.031..6705.047 rows=1500000 loops=1)
+                                             Group Key: r.id
+                                             Batches: 1  Memory Usage: 172049kB
+                                             ->  Gather  (cost=423178.02..738178.02 rows=3000000 width=20) (actual time=5646.599..5837.922 rows=1500000 loops=1)
+                                                   Workers Planned: 2
+                                                   Workers Launched: 2
+                                                   ->  Partial HashAggregate  (cost=422178.02..437178.02 rows=1500000 width=20) (actual time=5614.626..5728.801 rows=500000 loops=3)
+                                                         Group Key: r.id
+                                                         Batches: 1  Memory Usage: 81937kB
+                                                         Worker 0:  Batches: 1  Memory Usage: 81937kB
+                                                         Worker 1:  Batches: 1  Memory Usage: 106513kB
+                                                         ->  Hash Join  (cost=6.50..297178.01 rows=25000001 width=16) (actual time=128.130..2330.713 rows=20000000 loops=3)
+                                                               Hash Cond: (r.fkbus = st.fkbus)
+                                                               ->  Parallel Seq Scan on ride r  (cost=0.00..14359.00 rows=625000 width=16) (actual time=0.012..62.893 rows=500000 loops=3)
+                                                               ->  Hash  (cost=4.00..4.00 rows=200 width=8) (actual time=128.098..128.099 rows=200 loops=3)
+                                                                     Buckets: 1024  Batches: 1  Memory Usage: 16kB
+                                                                     ->  Seq Scan on seat st  (cost=0.00..4.00 rows=200 width=8) (actual time=128.014..128.047 rows=200 loops=3)
+                                       ->  Hash  (cost=27.00..27.00 rows=1500 width=8) (actual time=0.293..0.294 rows=1500 loops=1)
+                                             Buckets: 2048  Batches: 1  Memory Usage: 75kB
+                                             ->  Seq Scan on schedule s  (cost=0.00..27.00 rows=1500 width=8) (actual time=0.010..0.136 rows=1500 loops=1)
+                                 ->  Hash  (cost=1.60..1.60 rows=60 width=8) (actual time=0.050..0.051 rows=60 loops=1)
+                                       Buckets: 1024  Batches: 1  Memory Usage: 11kB
+                                       ->  Seq Scan on busroute br  (cost=0.00..1.60 rows=60 width=8) (actual time=0.033..0.038 rows=60 loops=1)
+         ->  Hash  (cost=1.10..1.10 rows=10 width=20) (actual time=381.786..381.788 rows=10 loops=1)
+               Buckets: 1024  Batches: 1  Memory Usage: 9kB
+               ->  Seq Scan on busstation b  (cost=0.00..1.10 rows=10 width=20) (actual time=381.759..381.765 rows=10 loops=1)
+ Planning Time: 0.483 ms
+ JIT:
+   Functions: 113
+   Options: Inlining true, Optimization true, Expressions true, Deforming true
+   Timing: Generation 6.767 ms, Inlining 306.355 ms, Optimization 469.674 ms, Emission 327.030 ms, Total 1109.826 ms
+ Execution Time: 22439.049 ms
+(59 rows)
+```
+
+**Вывод по HDD (CTE - запросы с UNION):**
+---
+**Исходный запрос:**
+
+(cost=80 590 536.40..80 616 786.40 actual time=637 070.144..637 197.838 rows=1 500 000)
+
+**Оптимизированный запрос:**
+
+(cost=2 226 820.09..2 226 820.12 actual time=22 118.558..22 346.421 rows=1 500 000)
+
+Сокращение времени выполнения 28.8 - кратное, по стоимости 36 - ти кратное снижение стоимости.
+
+
+
+
 
 **Доп.информация по секционированию в процессе тестирования, от которого отказался в итоге:**
 ```sql
