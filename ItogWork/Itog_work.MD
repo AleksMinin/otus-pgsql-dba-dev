@@ -286,7 +286,8 @@ Execution Time: 31095.827 ms                                                    
 
 
 (cost=64 137 403.40..64 163 653.40 actual time=494 850.868..494 909.358 rows=1 500 000)
-**Оптимизированный запрос**
+
+**Оптимизированный запрос:**
 
 (cost=3 560 944.75..3 561 132.25 actual time=30 790.133..31 037.933 rows=1 500 000)
 
@@ -311,56 +312,54 @@ SELECT r.id, r.startdate as depart_date, bs.city || ', ' || bs.name as busstatio
  GROUP BY r.id, r.startdate, bs.city || ', ' || bs.name 
  ORDER BY r.startdate
 
-           QUERY PLAN                                                                   
+                                                                                  QUERY PLAN                                            
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Sort  (cost=80590536.40..80616786.40 rows=10500000 width=56) (actual time=637070.144..637197.838 rows=1500000 loops=1)
+ Sort  (cost=66205753.29..66232003.29 rows=10500000 width=56) (actual time=506195.079..506257.456 rows=1500000 loops=1)
    Sort Key: r.startdate
-   Sort Method: external merge  Disk: 81632kB
-   ->  GroupAggregate  (cost=9092845.69..79007142.38 rows=10500000 width=56) (actual time=19526.879..636634.076 rows=1500000 loops=1)
+   Sort Method: quicksort  Memory: 170238kB
+   ->  GroupAggregate  (cost=81320.49..64622359.27 rows=10500000 width=56) (actual time=948.428..505806.898 rows=1500000 loops=1)
          Group Key: r.id, ((bs.city || ', '::text) || bs.name)
-         ->  Merge Join  (cost=9092845.69..57250570.02 rows=2159907236 width=52) (actual time=19526.370..492884.987 rows=2159899000 loops=1)
-               Merge Cond: (r.id = t.fkride)
-               ->  Nested Loop  (cost=81313.24..4756017.46 rows=60000001 width=28) (actual time=1049.345..28618.857 rows=60000000 loops=1)
-                     Join Filter: (r.fkbus = st.fkbus)
-                     Rows Removed by Join Filter: 240000000
-                     ->  Gather Merge  (cost=81313.24..256012.96 rows=1500000 width=28) (actual time=1049.284..1447.928 rows=1500000 loops=1)
+         ->  Nested Loop  (cost=81320.49..42865942.99 rows=2159891628 width=52) (actual time=947.876..371666.688 rows=2159899000 loops=1)
+               ->  Merge Join  (cost=81320.34..4392871.48 rows=53997288 width=36) (actual time=947.837..31393.524 rows=53997475 loops=1)
+                     Merge Cond: (r.id = t.fkride)
+                     ->  Gather Merge  (cost=81313.24..256012.96 rows=1500000 width=28) (actual time=947.805..1343.655 rows=1500000 loops=1)
                            Workers Planned: 2
                            Workers Launched: 2
-                           ->  Sort  (cost=80313.22..81875.72 rows=625000 width=28) (actual time=996.018..1059.907 rows=500000 loops=3)
+                           ->  Sort  (cost=80313.22..81875.72 rows=625000 width=28) (actual time=931.126..977.035 rows=500000 loops=3)
                                  Sort Key: r.id, (((bs.city || ', '::text) || bs.name))
-                                 Sort Method: quicksort  Memory: 39084kB
-                                 Worker 0:  Sort Method: quicksort  Memory: 41751kB
-                                 Worker 1:  Sort Method: external merge  Disk: 47032kB
-                                 ->  Hash Join  (cost=49.33..20146.04 rows=625000 width=28) (actual time=370.718..784.449 rows=500000 loops=3)
+                                 Sort Method: quicksort  Memory: 40984kB
+                                 Worker 0:  Sort Method: quicksort  Memory: 42523kB
+                                 Worker 1:  Sort Method: quicksort  Memory: 99826kB
+                                 ->  Hash Join  (cost=49.33..20146.04 rows=625000 width=28) (actual time=349.012..757.794 rows=500000 loops=3)
                                        Hash Cond: (br.fkbusstationfrom = bs.id)
-                                       ->  Hash Join  (cost=48.10..17808.88 rows=625000 width=16) (actual time=0.673..261.461 rows=500000 loops=3)
+                                       ->  Hash Join  (cost=48.10..17808.88 rows=625000 width=16) (actual time=0.659..267.213 rows=500000 loops=3)
                                              Hash Cond: (s.fkroute = br.id)
-                                             ->  Hash Join  (cost=45.75..16050.01 rows=625000 width=16) (actual time=0.590..168.724 rows=500000 loops=3)
+                                             ->  Hash Join  (cost=45.75..16050.01 rows=625000 width=16) (actual time=0.587..177.059 rows=500000 loops=3)
                                                    Hash Cond: (r.fkschedule = s.id)
-                                                   ->  Parallel Seq Scan on ride r  (cost=0.00..14359.00 rows=625000 width=16) (actual time=0.019..57.248 rows=500000 loops=3)
-                                                   ->  Hash  (cost=27.00..27.00 rows=1500 width=8) (actual time=0.554..0.556 rows=1500 loops=3)
+                                                   ->  Parallel Seq Scan on ride r  (cost=0.00..14359.00 rows=625000 width=16) (actual time=0.026..67.368 rows=500000 loops=3)
+                                                   ->  Hash  (cost=27.00..27.00 rows=1500 width=8) (actual time=0.544..0.546 rows=1500 loops=3)
                                                          Buckets: 2048  Batches: 1  Memory Usage: 75kB
-                                                         ->  Seq Scan on schedule s  (cost=0.00..27.00 rows=1500 width=8) (actual time=0.017..0.260 rows=1500 loops=3)
-                                             ->  Hash  (cost=1.60..1.60 rows=60 width=8) (actual time=0.062..0.063 rows=60 loops=3)
+                                                         ->  Seq Scan on schedule s  (cost=0.00..27.00 rows=1500 width=8) (actual time=0.014..0.252 rows=1500 loops=3)
+                                             ->  Hash  (cost=1.60..1.60 rows=60 width=8) (actual time=0.054..0.055 rows=60 loops=3)
                                                    Buckets: 1024  Batches: 1  Memory Usage: 11kB
-                                                   ->  Seq Scan on busroute br  (cost=0.00..1.60 rows=60 width=8) (actual time=0.040..0.047 rows=60 loops=3)
-                                       ->  Hash  (cost=1.10..1.10 rows=10 width=20) (actual time=369.982..369.983 rows=10 loops=3)
+                                                   ->  Seq Scan on busroute br  (cost=0.00..1.60 rows=60 width=8) (actual time=0.032..0.039 rows=60 loops=3)
+                                       ->  Hash  (cost=1.10..1.10 rows=10 width=20) (actual time=348.283..348.284 rows=10 loops=3)
                                              Buckets: 1024  Batches: 1  Memory Usage: 9kB
-                                             ->  Seq Scan on busstation bs  (cost=0.00..1.10 rows=10 width=20) (actual time=369.948..369.955 rows=10 loops=3)
-                     ->  Materialize  (cost=0.00..5.00 rows=200 width=8) (actual time=0.000..0.008 rows=200 loops=1500000)
-                           ->  Seq Scan on seat st  (cost=0.00..4.00 rows=200 width=8) (actual time=0.024..0.052 rows=200 loops=1)
-               ->  Materialize  (cost=9011421.74..9281410.14 rows=53997680 width=12) (actual time=18476.979..118403.429 rows=2159898961 loops=1)
-                     ->  Sort  (cost=9011421.74..9146415.94 rows=53997680 width=12) (actual time=18476.976..28308.434 rows=53997475 loops=1)
-                           Sort Key: t.fkride
-                           Sort Method: external merge  Disk: 1162928kB
-                           ->  Seq Scan on tickets t  (cost=0.00..1153579.80 rows=53997680 width=12) (actual time=0.037..5533.997 rows=53997475 loops=1)
- Planning Time: 0.720 ms
+                                             ->  Seq Scan on busstation bs  (cost=0.00..1.10 rows=10 width=20) (actual time=348.253..348.259 rows=10 loops=3)
+                     ->  Index Scan using tickets_fkride_idx on tickets t  (cost=0.44..3458145.27 rows=53997288 width=12) (actual time=0.020..23739.737 rows=53997475 loops=1)
+               ->  Memoize  (cost=0.15..0.86 rows=40 width=8) (actual time=0.000..0.001 rows=40 loops=53997475)
+                     Cache Key: r.fkbus
+                     Cache Mode: logical
+                     Hits: 53997472  Misses: 3  Evictions: 0  Overflows: 0  Memory Usage: 5kB
+                     ->  Index Scan using seat_fkbus_idx on seat st  (cost=0.14..0.85 rows=40 width=8) (actual time=0.009..0.016 rows=40 loops=3)
+                           Index Cond: (fkbus = r.fkbus)
+ Planning Time: 0.822 ms
  JIT:
-   Functions: 98
+   Functions: 100
    Options: Inlining true, Optimization true, Expressions true, Deforming true
-   Timing: Generation 4.910 ms, Inlining 171.195 ms, Optimization 550.343 ms, Emission 388.391 ms, Total 1114.839 ms
- Execution Time: 637392.105 ms
-(47 rows)(END)
+   Timing: Generation 4.635 ms, Inlining 163.272 ms, Optimization 518.351 ms, Emission 363.214 ms, Total 1049.472 ms
+ Execution Time: 506313.658 ms
+(45 rows)
 ```
 
 
@@ -463,13 +462,13 @@ select f.id, f.depart_date,
 
 **Исходный запрос:**
 
-(cost=80 590 536.40..80 616 786.40 actual time=637 070.144..637 197.838 rows=1 500 000)
+(cost=66 205 753.29..66 232 003.29 actual time=506 195.079..506 257.456 rows=1 500 000)
 
 **Оптимизированный запрос:**
 
 (cost=4 526 250.27..4 526 437.77 actual time=49 081.757..49 312.201 rows=1 500 000)
 
-Сокращение времени выполнения 13 - кратное, по стоимости 17.8 - ти кратное снижение стоимости.
+Сокращение времени выполнения 10 - кратное, по стоимости 14.6 - ти кратное снижение стоимости.
 
 
 ----
