@@ -366,8 +366,6 @@ SELECT r.id, r.startdate as depart_date, bs.city || ', ' || bs.name as busstatio
 **Решение №1 HDD (CTE + доп.индексы):**
 ---
 ```sql
--- Добавил памяти в сеансе для сортировки. иначе использует диск
-set work_mem = "200MB"
 
 create index CONCURRENTLY seat_fkbus_idx on book.seat (fkbus);
 create index CONCURRENTLY tickets_fkride_idx on book.tickets (fkride);
@@ -487,9 +485,6 @@ select f.id, f.depart_date,
 * Поднял настройки work_mem = 200MB вместо 55MB исходных. т.к. следующему запросу не хватало выделенной RAM для быстрой сортировки в памяти.
 ```sql
 -- без поднятия work_mem сортировке не хватало памяти, было так Sort Method: external merge  Disk: 67704kB   
--- поэтому временно поднял work_mem для теста
-
-SET work_mem = "200MB";
 
 explain analyze
 with
@@ -614,7 +609,6 @@ Execution Time: 16410.901 ms                                                    
 ---
 
 ```sql
-SET work_mem = "200MB";
 
 explain analyze
 with
